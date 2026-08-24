@@ -106,20 +106,17 @@ let appState = loadState();
 let selectedRequestId = null;
 
 function loadState() {
-  const saved = localStorage.getItem("mavro_apple_p2p_state_v2");
+  const saved = localStorage.getItem("mavro_telegram_p2p_v1");
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      if (!Array.isArray(parsed.users) || parsed.users.length === 0) {
-        parsed.users = [{
-          id: currentUserId,
-          name: currentTgUser?.name || "Участник",
-          username: currentTgUser?.username || null,
-          photo_url: currentTgUser?.photo_url || null,
-          balance_m: 0,
-          pending_m: 0
-        }];
+      if (Array.isArray(parsed.users)) {
+        // Очищаем старые демо/временные аккаунты из прошлых сессий
+        parsed.users = parsed.users.filter(u => u.id === currentUserId || (!u.id.startsWith("usr-") && !u.id.startsWith("demo-")));
+      } else {
+        parsed.users = [];
       }
+
       let me = parsed.users.find(u => u.id === currentUserId);
       if (!me) {
         parsed.users.unshift({
@@ -127,16 +124,18 @@ function loadState() {
           name: currentTgUser?.name || "Участник",
           username: currentTgUser?.username || null,
           photo_url: currentTgUser?.photo_url || null,
+          telegram_id: currentTgUser?.telegram_id || null,
           balance_m: parsed.userBalanceM || 0,
           pending_m: parsed.pendingBalanceM || 0
         });
       } else {
-        // Обновляем TG данные из актуального сеанса
+        // Актуализируем данные Telegram
         me.name = currentTgUser?.name || me.name;
         me.username = currentTgUser?.username || me.username;
         me.photo_url = currentTgUser?.photo_url || me.photo_url;
-        me.balance_m = parsed.userBalanceM;
-        me.pending_m = parsed.pendingBalanceM;
+        me.telegram_id = currentTgUser?.telegram_id || me.telegram_id;
+        me.balance_m = parsed.userBalanceM || 0;
+        me.pending_m = parsed.pendingBalanceM || 0;
       }
       return parsed;
     } catch (e) {
@@ -147,15 +146,20 @@ function loadState() {
 }
 
 function saveState() {
+  // Очищаем любых фантомных пользователей перед сохранением
+  if (Array.isArray(appState.users)) {
+    appState.users = appState.users.filter(u => u.id === currentUserId || (!u.id.startsWith("usr-") && !u.id.startsWith("demo-")));
+  }
+
   let me = appState.users.find(u => u.id === currentUserId);
   if (me) {
     me.balance_m = appState.userBalanceM;
     me.pending_m = appState.pendingBalanceM;
-    // Синхронизируем TG-данные при каждом сохранении
     if (currentTgUser) {
       me.name = currentTgUser.name;
       me.username = currentTgUser.username;
       me.photo_url = currentTgUser.photo_url;
+      me.telegram_id = currentTgUser.telegram_id;
     }
   } else {
     appState.users.unshift({
@@ -163,12 +167,13 @@ function saveState() {
       name: currentTgUser?.name || "Участник",
       username: currentTgUser?.username || null,
       photo_url: currentTgUser?.photo_url || null,
+      telegram_id: currentTgUser?.telegram_id || null,
       balance_m: appState.userBalanceM,
       pending_m: appState.pendingBalanceM
     });
   }
 
-  localStorage.setItem("mavro_apple_p2p_state_v2", JSON.stringify(appState));
+  localStorage.setItem("mavro_telegram_p2p_v1", JSON.stringify(appState));
   renderAll();
 }
 
@@ -323,9 +328,7 @@ async function initSupabase() {
 async function syncUserWithSupabase() {
   if (!supabaseClient || !isSupabaseConnected) return;
 
-  const displayName = currentTgUser
-    ? (currentTgUser.username ? `${currentTgUser.name} (@${currentTgUser.username})` : currentTgUser.name)
-    : ("Участник");
+  const displayName = currentTgUser ? currentTgUser.name : "Участник";
 
   try {
     const { data, error } = await supabaseClient
@@ -391,7 +394,7 @@ async function fetchRequestsFromSupabase() {
       appState.requests = data.map(row => {
         const isMySent = row.sender_id === currentUserId;
         const senderDisplayName = isMySent
-          ? "Вы (Текущий аккаунт)"
+          ? (currentTgUser ? currentTgUser.name : "Вы (Текущий аккаунт)")
           : (row.sender_name || (row.sender_id ? "Участник (" + row.sender_id.slice(-4) + ")" : null));
 
         return {
@@ -429,7 +432,10 @@ async function fetchAllUsersFromSupabase() {
       .order("balance_m", { ascending: false });
 
     if (!error && data && data.length > 0) {
-      appState.users = data.map(dbUser => {
+      // Исключаем старые демо/временные аккаунты из прошлых тестов
+      const validUsers = data.filter(u => !u.id.startsWith("demo-") && !u.id.startsWith("usr-"));
+
+      appState.users = validUsers.map(dbUser => {
         const isMe = dbUser.id === currentUserId;
         return {
           id: dbUser.id,
