@@ -5,7 +5,7 @@
 // ==============================================================================
 
 const RATE_RUB_PER_M = 1;
-const ASSISTANCE_LIMIT_MULTIPLIER = 1.30;
+const ASSISTANCE_LIMIT_MULTIPLIER = 1.0;
 const STARTER_INVITE_LIMIT_RUB = 1000;
 
 // Supabase конфигурация
@@ -591,13 +591,13 @@ function renderAll() {
       if (usedHelp > 0) {
         userLimitSubtext.textContent = `Доступно к запросу: ${limitRub.toLocaleString("ru-RU")} ₽ (получено: ${usedHelp.toLocaleString("ru-RU")} ₽)`;
       } else if (appState.userBalanceM > 0) {
-        userLimitSubtext.textContent = `Доступно к выводу (+30% к ${appState.userBalanceM.toLocaleString("ru-RU")} М°)`;
+        userLimitSubtext.textContent = `Доступно к выводу (1:1 к ${appState.userBalanceM.toLocaleString("ru-RU")} М°)`;
       } else {
         userLimitSubtext.textContent = `Стартовый лимит за друга: ${limitRub.toLocaleString("ru-RU")} ₽`;
       }
     } else {
       if (usedHelp > 0) {
-        userLimitSubtext.textContent = `Лимит исчерпан (получено ${usedHelp.toLocaleString("ru-RU")} ₽). Окажите помощь другим (+30%)!`;
+        userLimitSubtext.textContent = `Лимит исчерпан (получено ${usedHelp.toLocaleString("ru-RU")} ₽). Окажите помощь другим (1:1)!`;
       } else {
         userLimitSubtext.textContent = `Окажите помощь или пригласите друга для открытия лимита`;
       }
@@ -611,7 +611,7 @@ function renderAll() {
     } else {
       amountHintElem.style.color = "var(--text-muted)";
       amountHintElem.textContent = usedHelp > 0 
-        ? `Лимит исчерпан. Окажите помощь другим участникам, чтобы получить +30% к новому лимиту.` 
+        ? `Лимит исчерпан. Окажите помощь другим участникам, чтобы получить М° для нового вывода.` 
         : `Текущий лимит: 0 ₽. Окажите помощь или пригласите друга для открытия лимита 1 000 ₽.`;
     }
   }
@@ -686,7 +686,7 @@ function renderAll() {
             <div class="req-info-grid">
               <div class="info-snippet"><strong>Способ:</strong> ${escapeHtml(req.paymentType)}</div>
               <div class="info-snippet"><strong>Цель:</strong> ${escapeHtml(req.comment)}</div>
-              <div class="info-snippet"><strong>Лимит после перевода:</strong> +${boostLimit.toLocaleString("ru-RU")} ₽ (+30%)</div>
+              <div class="info-snippet"><strong>Лимит после перевода:</strong> +${boostLimit.toLocaleString("ru-RU")} ₽ (1:1)</div>
             </div>
 
             <div class="requisites-box">
@@ -787,7 +787,7 @@ function renderAll() {
             </div>
 
             <div style="font-size: 12px; color: #2563eb; font-weight: 500;">
-              Как только ${escapeHtml(req.name)} подтвердит получение рублей, вам будет начислено <strong>+${earnedM.toLocaleString("ru-RU")} М°</strong>, а лимит на вывод увеличится на <strong>+30%</strong>.
+              Как только ${escapeHtml(req.name)} подтвердит получение рублей, вам будет начислено <strong>+${earnedM.toLocaleString("ru-RU")} М°</strong>, а лимит на вывод увеличится на такую же сумму (1:1).
             </div>
           </div>
         `;
@@ -898,7 +898,7 @@ function renderLeaderboard() {
         <div class="my-rank-badge">#${myRank}</div>
         <div class="my-rank-text">
           <strong>Ваша позиция в рейтинге</strong>
-          <span>Лимит на вывод: ${myLimit.toLocaleString("ru-RU")} ₽ (+30%)</span>
+          <span>Лимит на вывод: ${myLimit.toLocaleString("ru-RU")} ₽ (1:1)</span>
         </div>
       </div>
       <div class="my-rank-right">
@@ -1114,7 +1114,7 @@ function openHelpModal(requestId) {
       <div style="font-size: 16px; font-weight: 800; font-family: monospace; color: var(--accent);">${escapeHtml(req.details)}</div>
     </div>
     <div style="font-size: 13px; color: var(--success); font-weight: 600; line-height: 1.4;">
-      🎁 После подтверждения второй стороной вам начислится <strong>+${earnedM.toLocaleString("ru-RU")} М°</strong>, а ваш лимит на запрос помощи вырастет на <strong>+${newLimitIncrease.toLocaleString("ru-RU")} ₽ (+30%)</strong>!
+      🎁 После подтверждения второй стороной вам начислится <strong>+${earnedM.toLocaleString("ru-RU")} М°</strong>, а ваш лимит на запрос помощи вырастет на <strong>+${newLimitIncrease.toLocaleString("ru-RU")} ₽ (1:1)</strong>!
     </div>
   `;
 
@@ -1176,7 +1176,7 @@ async function submitAssistanceTransfer() {
     }
   }
 
-  alert(`🤝 Перевод на ${req.amount.toLocaleString("ru-RU")} ₽ отправлен получателю ${req.name}!\n\nПолучатель получил уведомление в приложении (🔔). Как только он проверит зачисление рублей на свою карту и подтвердит сделку, вам зачислится +${earnedM.toLocaleString("ru-RU")} М° и увеличится лимит на +30%.`);
+  alert(`🤝 Перевод на ${req.amount.toLocaleString("ru-RU")} ₽ отправлен получателю ${req.name}!\n\nПолучатель получил уведомление в приложении (🔔). Как только он проверит зачисление рублей на свою карту и подтвердит сделку, вам зачислится +${earnedM.toLocaleString("ru-RU")} М° и увеличится лимит на вывод 1:1.`);
 }
 
 // Получатель подтверждает получение
@@ -1509,7 +1509,7 @@ function renderAdminUsers() {
         </div>
 
         <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
-          Лимит запроса помощи (+30%): <strong style="color: var(--accent);">${limitRub.toLocaleString("ru-RU")} ₽</strong>
+          Лимит запроса помощи (1:1): <strong style="color: var(--accent);">${limitRub.toLocaleString("ru-RU")} ₽</strong>
         </div>
 
         <div class="admin-quick-row">
