@@ -203,18 +203,34 @@ function updateDbStatusBadge(status, message) {
 }
 
 // ==============================================================================
-// РАСЧЕТ ЛИМИТОВ И РАЗМОРОЗКА
+// РАСЧЕТ ДИНАМИЧЕСКИХ ЛИМИТОВ (С УЧЕТОМ ПОЛУЧЕННОЙ И ЗАПРОШЕННОЙ ПОМОЩИ)
 // ==============================================================================
 
+function getUserAvailableLimitRub(userId = currentUserId) {
+  let user = appState.users.find(u => u.id === userId);
+  let balM = (userId === currentUserId) ? (appState.userBalanceM || 0) : (user?.balance_m || 0);
+
+  // 1. Gross лимит от баланса Мавро (+30%)
+  let grossLimit = Math.floor(balM * ASSISTANCE_LIMIT_MULTIPLIER);
+
+  // 2. Бонус за приглашенных друзей
+  if (userId === currentUserId) {
+    if (appState.starterBonusUnlocked || appState.invitedFriendsCount > 0) {
+      grossLimit += (appState.invitedFriendsCount > 0 ? appState.invitedFriendsCount : 1) * STARTER_INVITE_LIMIT_RUB;
+    }
+  }
+
+  // 3. Использованный лимит: сумма всех активных и закрытых запросов помощи пользователя
+  const usedHelp = appState.requests
+    .filter(r => (r.user_id === userId || (userId === currentUserId && r.isMine)) && 
+                 (r.status === "open" || r.status === "sent" || r.status === "confirmed"))
+    .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+
+  return Math.max(0, grossLimit - usedHelp);
+}
+
 function getRequestLimitRub() {
-  if (appState.userBalanceM > 0) {
-    return Math.floor(appState.userBalanceM * ASSISTANCE_LIMIT_MULTIPLIER);
-  }
-  // Если баланс 0, но приглашен друг или разблокирован стартовый бонус
-  if (appState.starterBonusUnlocked || appState.invitedFriendsCount > 0) {
-    return STARTER_INVITE_LIMIT_RUB;
-  }
-  return 0;
+  return getUserAvailableLimitRub(currentUserId);
 }
 
 function reconcilePendingBalances(notify = false) {
@@ -554,6 +570,9 @@ function renderAll() {
   const dailyDealsElem = document.getElementById("daily-deals-counter");
 
   const limitRub = getRequestLimitRub();
+  const usedHelp = appState.requests
+    .filter(r => (r.user_id === currentUserId || r.isMine) && (r.status === "open" || r.status === "sent" || r.status === "confirmed"))
+    .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 
   if (userBalanceElem) {
     userBalanceElem.textContent = `${appState.userBalanceM.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} М°`;
@@ -568,12 +587,20 @@ function renderAll() {
   }
 
   if (userLimitSubtext) {
-    if (appState.userBalanceM > 0) {
-      userLimitSubtext.textContent = `Доступно к выводу (+30% к ${appState.userBalanceM.toLocaleString("ru-RU")} М°)`;
-    } else if (limitRub > 0) {
-      userLimitSubtext.textContent = `Стартовый лимит за друга: ${limitRub.toLocaleString("ru-RU")} ₽`;
+    if (limitRub > 0) {
+      if (usedHelp > 0) {
+        userLimitSubtext.textContent = `Доступно к запросу: ${limitRub.toLocaleString("ru-RU")} ₽ (получено: ${usedHelp.toLocaleString("ru-RU")} ₽)`;
+      } else if (appState.userBalanceM > 0) {
+        userLimitSubtext.textContent = `Доступно к выводу (+30% к ${appState.userBalanceM.toLocaleString("ru-RU")} М°)`;
+      } else {
+        userLimitSubtext.textContent = `Стартовый лимит за друга: ${limitRub.toLocaleString("ru-RU")} ₽`;
+      }
     } else {
-      userLimitSubtext.textContent = `Окажите помощь или пригласите друга`;
+      if (usedHelp > 0) {
+        userLimitSubtext.textContent = `Лимит исчерпан (получено ${usedHelp.toLocaleString("ru-RU")} ₽). Окажите помощь другим (+30%)!`;
+      } else {
+        userLimitSubtext.textContent = `Окажите помощь или пригласите друга для открытия лимита`;
+      }
     }
   }
 
@@ -583,7 +610,9 @@ function renderAll() {
       amountHintElem.textContent = `Доступно к запросу: ${limitRub.toLocaleString("ru-RU")} ₽`;
     } else {
       amountHintElem.style.color = "var(--text-muted)";
-      amountHintElem.textContent = `Текущий лимит: 0 ₽. Окажите помощь или пригласите друга для открытия лимита 1 000 ₽.`;
+      amountHintElem.textContent = usedHelp > 0 
+        ? `Лимит исчерпан. Окажите помощь другим участникам, чтобы получить +30% к новому лимиту.` 
+        : `Текущий лимит: 0 ₽. Окажите помощь или пригласите друга для открытия лимита 1 000 ₽.`;
     }
   }
 
@@ -897,7 +926,7 @@ function renderLeaderboard() {
     else if (rank === 2) { rankBadge = "🥈 2"; rankClass = "rank-2"; }
     else if (rank === 3) { rankBadge = "🥉 3"; rankClass = "rank-3"; }
 
-    const limitRub = Math.floor((user.balance_m || 0) * ASSISTANCE_LIMIT_MULTIPLIER);
+    const limitRub = getUserAvailableLimitRub(user.id);
     const handleText = user.username ? `@${escapeHtml(user.username)}` : `ID: ${escapeHtml(user.id.slice(0, 8))}...`;
 
     return `
