@@ -210,7 +210,7 @@ function getUserAvailableLimitRub(userId = currentUserId) {
   let user = appState.users.find(u => u.id === userId);
   let balM = (userId === currentUserId) ? (appState.userBalanceM || 0) : (user?.balance_m || 0);
 
-  // 1. Gross лимит от баланса Мавро (+30%)
+  // 1. Gross лимит от текущего баланса Мавро (+30%)
   let grossLimit = Math.floor(balM * ASSISTANCE_LIMIT_MULTIPLIER);
 
   // 2. Бонус за приглашенных друзей
@@ -220,13 +220,13 @@ function getUserAvailableLimitRub(userId = currentUserId) {
     }
   }
 
-  // 3. Использованный лимит: сумма всех активных и закрытых запросов помощи пользователя
-  const usedHelp = appState.requests
+  // 3. Активные незавершенные заявки (open или sent), резервирующие лимит
+  const activePendingHelp = appState.requests
     .filter(r => (r.user_id === userId || (userId === currentUserId && r.isMine)) && 
-                 (r.status === "open" || r.status === "sent" || r.status === "confirmed"))
+                 (r.status === "open" || r.status === "sent"))
     .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 
-  return Math.max(0, grossLimit - usedHelp);
+  return Math.max(0, grossLimit - activePendingHelp);
 }
 
 function getRequestLimitRub() {
@@ -1187,14 +1187,38 @@ async function receiverConfirmTransfer(requestId) {
   const earnedM = req.amount * RATE_RUB_PER_M;
   req.status = "confirmed";
 
-  // Если текущий пользователь был отправителем (например, при локальном тесте)
+  // 1. СПИСАНИЕ БАЛАНСА У ПОЛУЧАТЕЛЯ (1 М° даёт 1.30 ₽ вывода, поэтому при выводе списывается amount / 1.30)
+  const mavroToDeduct = Math.round((req.amount / ASSISTANCE_LIMIT_MULTIPLIER) * 100) / 100;
+  const isMeReceiver = (req.user_id === currentUserId || req.isMine);
+
+  if (isMeReceiver) {
+    if (appState.userBalanceM >= mavroToDeduct) {
+      appState.userBalanceM = Math.max(0, Math.round((appState.userBalanceM - mavroToDeduct) * 100) / 100);
+    } else {
+      // Использован стартовый бонус за приглашение
+      const remainingFromBonus = req.amount - (appState.userBalanceM * ASSISTANCE_LIMIT_MULTIPLIER);
+      appState.userBalanceM = 0;
+      if (remainingFromBonus > 0) {
+        if (appState.starterBonusUnlocked) appState.starterBonusUnlocked = false;
+        if (appState.invitedFriendsCount > 0) {
+          appState.invitedFriendsCount = Math.max(0, appState.invitedFriendsCount - 1);
+        }
+      }
+    }
+  } else {
+    const receiverUser = appState.users.find(u => u.id === req.user_id);
+    if (receiverUser) {
+      receiverUser.balance_m = Math.max(0, Math.round(((receiverUser.balance_m || 0) - mavroToDeduct) * 100) / 100);
+    }
+  }
+
+  // 2. НАЧИСЛЕНИЕ МОНЕТ ОТПРАВИТЕЛЮ (тому, кто перевёл рубли)
   const isCurrentSender = (req.sender_id === currentUserId);
   if (isCurrentSender) {
     appState.pendingBalanceM = Math.max(0, (appState.pendingBalanceM || 0) - earnedM);
     appState.userBalanceM = (appState.userBalanceM || 0) + earnedM;
   }
 
-  // Обновляем отправителя в локальном списке
   if (req.sender_id && req.sender_id !== currentUserId) {
     const senderUser = appState.users.find(u => u.id === req.sender_id);
     if (senderUser) {
@@ -1206,6 +1230,7 @@ async function receiverConfirmTransfer(requestId) {
   reconcilePendingBalances();
   saveState();
 
+  // 3. СИНХРОНИЗАЦИЯ С SUPABASE
   if (supabaseClient && isSupabaseConnected) {
     try {
       await supabaseClient
@@ -1213,8 +1238,33 @@ async function receiverConfirmTransfer(requestId) {
         .update({ status: "confirmed" })
         .eq("id", req.id);
 
+      // Обновляем баланс получателя в Supabase (списание Мавро)
+      if (req.user_id && req.user_id !== currentUserId) {
+        const { data: recDbUser } = await supabaseClient
+          .from("mavro_users")
+          .select("balance_m")
+          .eq("id", req.user_id)
+          .single();
+
+        if (recDbUser) {
+          const updatedRecBal = Math.max(0, Math.round(((Number(recDbUser.balance_m) || 0) - mavroToDeduct) * 100) / 100);
+          await supabaseClient
+            .from("mavro_users")
+            .update({ balance_m: updatedRecBal })
+            .eq("id", req.user_id);
+        }
+      } else if (isMeReceiver) {
+        await supabaseClient
+          .from("mavro_users")
+          .update({
+            balance_m: appState.userBalanceM,
+            pending_m: appState.pendingBalanceM
+          })
+          .eq("id", currentUserId);
+      }
+
+      // Обновляем баланс отправителя в Supabase (начисление Мавро)
       if (req.sender_id && req.sender_id !== currentUserId) {
-        // Начисляем монеты отправителю в Supabase
         const { data: senderDbUser } = await supabaseClient
           .from("mavro_users")
           .select("balance_m, pending_m")
@@ -1247,7 +1297,7 @@ async function receiverConfirmTransfer(requestId) {
   }
 
   closeConfirmModal();
-  alert(`✅ Сделка подтверждена!\nВы подтвердили получение ${req.amount.toLocaleString("ru-RU")} ₽. Сделка успешно закрыта, а участнику начислены монеты Мавро.`);
+  alert(`✅ Сделка подтверждена!\nВы подтвердили получение ${req.amount.toLocaleString("ru-RU")} ₽ на карту.\nС вашего баланса списано ${mavroToDeduct.toLocaleString("ru-RU", { minimumFractionDigits: 2 })} М°, а отправителю зачислены монеты.`);
   switchTab("tab-history");
 }
 
