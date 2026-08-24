@@ -63,6 +63,13 @@ function isRealTelegramUser() {
   return Boolean(TG?.initDataUnsafe?.user?.id);
 }
 
+const ADMIN_TELEGRAM_IDS = ["495434214"];
+
+function isUserAdmin() {
+  const rawId = currentTgUser?.telegram_id || currentTgUser?.id;
+  return ADMIN_TELEGRAM_IDS.includes(String(rawId));
+}
+
 // Инициализируем пользователя сразу
 let currentUserId = initTelegramUser();
 
@@ -626,6 +633,12 @@ function renderAll() {
   const headerUsersElem = document.getElementById("header-users-count");
   if (headerUsersElem) {
     headerUsersElem.textContent = `${appState.users.length} участников`;
+  }
+
+  // Кнопка панели администратора (только для ID 495434214)
+  const adminBtn = document.getElementById("btn-open-admin");
+  if (adminBtn) {
+    adminBtn.style.display = isUserAdmin() ? "flex" : "none";
   }
 
   const tgNameElem = document.getElementById("tg-user-name");
@@ -1431,6 +1444,10 @@ async function handleCreateRequest(e) {
 // ==============================================================================
 
 function openAdminModal() {
+  if (!isUserAdmin()) {
+    alert("Доступ запрещен. Панель управления доступна только для администратора (ID 495434214).");
+    return;
+  }
   reconcilePendingBalances();
   renderAdminUsers();
   renderAdminRequests();
@@ -1984,14 +2001,115 @@ async function adminGenerateTestRequests() {
   showAdminToast("➕ Добавлено 3 новые тестовые заявки!");
 }
 
-function adminResetDemoData() {
-  if (!confirm("Вы уверены, что хотите сбросить все данные к начальным демо?")) return;
-  localStorage.removeItem("mavro_apple_p2p_state_v2");
-  appState = JSON.parse(JSON.stringify(DEFAULT_STATE));
+// 1. Очистить все P2P заявки (текущие и завершенные)
+async function adminClearAllRequests() {
+  if (!confirm("⚠️ Вы уверены, что хотите удалить ВСЕ заявки помощи из базы?")) return;
+
+  showAdminToast("🗑️ Удаление всех заявок...");
+
+  appState.requests = [];
+  appState.pendingBalanceM = 0;
+  appState.users.forEach(u => { u.pending_m = 0; });
   saveState();
-  renderAdminUsers();
+
+  if (supabaseClient && isSupabaseConnected) {
+    try {
+      await supabaseClient
+        .from("mavro_requests")
+        .delete()
+        .neq("id", "");
+
+      await supabaseClient
+        .from("mavro_users")
+        .update({ pending_m: 0 })
+        .neq("id", "");
+    } catch (e) {
+      console.warn("Supabase clear requests error:", e);
+    }
+  }
+
   renderAdminRequests();
-  showAdminToast("♻️ База данных сброшена к начальному демо-состоянию.");
+  renderAdminUsers();
+  renderAll();
+  showAdminToast("✅ Все P2P заявки удалены, холды сброшены!");
+}
+
+// 2. Обнулить балансы всех участников
+async function adminResetAllBalances() {
+  if (!confirm("⚠️ Вы уверены, что хотите обнулить балансы ВСЕХ участников?")) return;
+
+  showAdminToast("🪙 Обнуление балансов...");
+
+  appState.userBalanceM = 0;
+  appState.pendingBalanceM = 0;
+  appState.starterBonusUnlocked = false;
+  appState.invitedFriendsCount = 0;
+  appState.users.forEach(u => {
+    u.balance_m = 0;
+    u.pending_m = 0;
+  });
+  saveState();
+
+  if (supabaseClient && isSupabaseConnected) {
+    try {
+      await supabaseClient
+        .from("mavro_users")
+        .update({ balance_m: 0, pending_m: 0 })
+        .neq("id", "");
+    } catch (e) {
+      console.warn("Supabase reset balances error:", e);
+    }
+  }
+
+  renderAdminUsers();
+  renderAll();
+  showAdminToast("✅ Балансы всех участников обнулены!");
+}
+
+// 3. ПОЛНЫЙ СБРОС ВСЕЙ БАЗЫ ДАННЫХ
+async function adminWipeEntireDatabase() {
+  const answer = prompt("💥 ВНИМАНИЕ: Это действие полностью удалит ВСЕ заявки и обнулит балансы всех участников в базе Supabase.\n\nДля подтверждения введите слово: СБРОС");
+  if (answer !== "СБРОС" && answer !== "сброс") {
+    alert("Сброс отменен.");
+    return;
+  }
+
+  showAdminToast("💥 Выполняется полный сброс базы данных...");
+
+  appState.requests = [];
+  appState.userBalanceM = 0;
+  appState.pendingBalanceM = 0;
+  appState.starterBonusUnlocked = false;
+  appState.invitedFriendsCount = 0;
+  appState.users.forEach(u => {
+    u.balance_m = 0;
+    u.pending_m = 0;
+  });
+  saveState();
+
+  if (supabaseClient && isSupabaseConnected) {
+    try {
+      // Удаляем все заявки
+      await supabaseClient
+        .from("mavro_requests")
+        .delete()
+        .neq("id", "");
+
+      // Обнуляем всех пользователей
+      await supabaseClient
+        .from("mavro_users")
+        .update({ balance_m: 0, pending_m: 0 })
+        .neq("id", "");
+    } catch (e) {
+      console.warn("Supabase wipe error:", e);
+    }
+  }
+
+  renderAdminRequests();
+  renderAdminUsers();
+  renderAll();
+  showAdminToast("🎉 База данных полностью очищена!");
+  alert("🎉 Полный сброс завершен! Все заявки удалены, балансы участников обнулены.");
 }
 
 function escapeHtml(text) {

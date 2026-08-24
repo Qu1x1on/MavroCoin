@@ -33,6 +33,11 @@
             </div>
           </div>
 
+          <!-- Кнопка админ-панели (только для ID 495434214) -->
+          <button class="icon-btn-header" id="btn-open-admin" onclick="openAdminModal()" title="Панель администратора" style="display:none; color: #ff9500; font-size: 16px;">
+            ⚙️
+          </button>
+
           <!-- Кнопка входящих уведомлений/чеков -->
           <button class="icon-btn-header" onclick="openConfirmModal()" title="Входящие подтверждения">
             🔔
@@ -434,46 +439,60 @@
         <div id="admin-requests-list" class="admin-requests-table-container"></div>
       </div>
 
-      <!-- Вкладка 3: Утилиты -->
+      <!-- Вкладка 3: Управление и сброс базы данных -->
       <div id="admin-tab-tools" class="admin-tab-content">
         <div class="admin-tools-grid">
+          <div class="admin-tool-card danger-tool" style="border-color: #dc2626; background: rgba(220, 38, 38, 0.05);">
+            <div class="admin-tool-icon">💥</div>
+            <div class="admin-tool-body">
+              <h4 style="color: #dc2626;">Полный сброс всей базы данных</h4>
+              <p>Очищает абсолютно все заявки на помощь и обнуляет балансы и холды участников в Supabase и локально.</p>
+              <button class="btn-apple btn-apple-danger" style="margin-top: 8px; font-weight: 700;" onclick="adminWipeEntireDatabase()">
+                💥 Сбросить всю базу данных
+              </button>
+            </div>
+          </div>
+
+          <div class="admin-tool-card danger-tool">
+            <div class="admin-tool-icon">🗑️</div>
+            <div class="admin-tool-body">
+              <h4>Очистить все P2P заявки</h4>
+              <p>Удаляет все текущие и завершенные заявки помощи, снимает холды.</p>
+              <button class="btn-apple btn-apple-danger" style="margin-top: 8px;" onclick="adminClearAllRequests()">
+                🗑️ Удалить все заявки
+              </button>
+            </div>
+          </div>
+
+          <div class="admin-tool-card">
+            <div class="admin-tool-icon">🪙</div>
+            <div class="admin-tool-body">
+              <h4>Обнулить балансы участников</h4>
+              <p>Устанавливает баланс 0.00 М° и холд 0.00 М° всем пользователям.</p>
+              <button class="btn-apple btn-apple-secondary" style="margin-top: 8px;" onclick="adminResetAllBalances()">
+                🪙 Обнулить балансы
+              </button>
+            </div>
+          </div>
+
           <div class="admin-tool-card highlight-tool">
             <div class="admin-tool-icon">⚡</div>
             <div class="admin-tool-body">
-              <h4>Мгновенная разморозка</h4>
-              <p>Списывает холд и зачисляет М° по подтвержденным сделкам.</p>
+              <h4>Разморозка холдов</h4>
+              <p>Сверяет зависшие сделки и зачисляет монеты.</p>
               <button class="btn-apple btn-apple-green" style="margin-top: 8px;" onclick="adminFixStuckPending()">
                 ⚡ Разморозить
               </button>
             </div>
           </div>
+
           <div class="admin-tool-card">
             <div class="admin-tool-icon">🔄</div>
             <div class="admin-tool-body">
               <h4>Синхронизация Supabase</h4>
-              <p>Перезагрузка всех таблиц с сервера.</p>
+              <p>Принудительно перезагрузить все данные из облачной БД.</p>
               <button class="btn-apple btn-apple-blue" style="margin-top: 8px;" onclick="adminForceSyncSupabase()">
                 🔄 Синхронизировать
-              </button>
-            </div>
-          </div>
-          <div class="admin-tool-card">
-            <div class="admin-tool-icon">➕</div>
-            <div class="admin-tool-body">
-              <h4>3 демо-заявки</h4>
-              <p>Создать тестовые заявки в реестр.</p>
-              <button class="btn-apple btn-apple-secondary" style="margin-top: 8px;" onclick="adminGenerateTestRequests()">
-                ➕ Добавить
-              </button>
-            </div>
-          </div>
-          <div class="admin-tool-card danger-tool">
-            <div class="admin-tool-icon">♻️</div>
-            <div class="admin-tool-body">
-              <h4>Сброс данных</h4>
-              <p>Сброс к исходному состоянию.</p>
-              <button class="btn-apple btn-apple-danger" style="margin-top: 8px;" onclick="adminResetDemoData()">
-                ♻️ Сбросить всё
               </button>
             </div>
           </div>
