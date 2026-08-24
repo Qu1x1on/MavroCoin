@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>MavroCoin (М°) — Мобильная Касса Взаимопомощи P2P</title>
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- Мобильный контейнер приложения (App Shell) -->
+  <div class="app-shell">
+
+    <!-- 1. Мобильная шапка приложения (Top App Bar) -->
+    <header class="app-header">
+      <div class="header-main-row">
+        <div class="brand">
+          <div class="brand-icon">М°</div>
+          <h1 class="brand-title">MavroCoin</h1>
+        </div>
+
+        <div class="header-action-group">
+          <!-- Telegram профиль участника -->
+          <div class="tg-user-pill" id="tg-user-pill">
+            <div class="tg-user-avatar" id="tg-user-avatar">TG</div>
+            <div class="tg-user-info">
+              <span class="tg-user-name" id="tg-user-name">Загрузка...</span>
+              <span class="tg-user-username" id="tg-user-sub">@telegram</span>
+            </div>
+          </div>
+
+          <!-- Кнопка входящих уведомлений/чеков -->
+          <button class="icon-btn-header" onclick="openConfirmModal()" title="Входящие подтверждения">
+            🔔
+            <span class="header-bell-badge" id="incoming-count-badge" style="display:none;">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Вторая строка шапки со статусами и статистикой -->
+      <div class="header-sub-row">
+        <div class="mini-badge">
+          <span>Курс: <strong>1 М° = 1 ₽</strong></span>
+        </div>
+        <div class="mini-badge">
+          <span>👥 <strong id="header-users-count">Участники TG</strong></span>
+        </div>
+        <div class="mini-badge mini-badge-highlight">
+          <span>Оказанные помощи за день: <strong id="daily-deals-counter" style="color: #16a34a;">0</strong></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Основная прокручиваемая область контента -->
+    <main class="app-content">
+
+      <!-- =========================================================
+         ВКЛАДКА 1: Главный экран / Оказать помощь
+         ========================================================= -->
+      <section id="tab-give" class="tab-panel active">
+        <!-- 2. Виджет баланса (Mobile Balance Card) -->
+        <div class="balance-card">
+          <div class="balance-top-row">
+            <div>
+              <div class="balance-label">Ваш баланс Мавро</div>
+              <div class="balance-value green" id="user-m-balance">0.00 М°</div>
+              <div class="balance-subtext">1 М° = 1 ₽ оказанной помощи</div>
+            </div>
+            <button type="button" class="btn-quick-bonus" onclick="openInviteModal()">
+              🎁 +1 000 ₽
+            </button>
+          </div>
+
+          <div class="balance-bottom-grid">
+            <div class="balance-mini-col">
+              <span class="mini-label">Лимит вывода (+30%):</span>
+              <span class="mini-val blue" id="user-req-limit">0 ₽</span>
+            </div>
+            <div class="balance-mini-col">
+              <span class="mini-label">В холде:</span>
+              <span class="mini-val orange" id="user-m-pending">0.00 М°</span>
+            </div>
+          </div>
+          <div class="balance-hint-line" id="user-limit-subtext">Окажите помощь или пригласите друга</div>
+        </div>
+
+        <!-- 3. Инструкция для новичка (Onboarding Card) -->
+        <div class="onboarding-card" id="onboarding-block">
+          <div class="onboarding-header">
+            <span class="onboarding-badge">🚀 Для новичка</span>
+            <span class="onboarding-title">Как запросить 1 000 ₽?</span>
+          </div>
+          <p class="onboarding-desc">
+            На балансе <strong>0 М°</strong>. Выберите один из двух способов открыть лимит на получение помощи:
+          </p>
+          <div class="onboarding-choices">
+            <div class="choice-item" onclick="switchTab('tab-give')">
+              <div class="choice-icon">🤝</div>
+              <div class="choice-text">
+                <strong>1. Оказать помощь</strong>
+                <span>Переведите рубли и получите М° с лимитом <strong>+30%</strong></span>
+              </div>
+              <span class="choice-arrow">➔</span>
+            </div>
+            <div class="choice-item choice-highlight" onclick="openInviteModal()">
+              <div class="choice-icon">🎁</div>
+              <div class="choice-text">
+                <strong>2. Пригласить друга</strong>
+                <span>Отправьте ссылку и сразу откройте лимит <strong>1 000 ₽</strong></span>
+              </div>
+              <span class="choice-arrow">➔</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. ДВЕ ГЛАВНЫЕ КНОПКИ ДЕЙСТВИЯ (Mobile Hero Banners) -->
+        <div class="hero-banners-row">
+          <div class="mobile-hero-btn hero-give" onclick="switchTab('tab-give')">
+            <div class="hero-btn-icon">🤝</div>
+            <div class="hero-btn-text">
+              <div class="hero-btn-title">Оказать помощь</div>
+              <div class="hero-btn-sub">Купить М° (1:1) · Лимит +30%</div>
+            </div>
+          </div>
+          <div class="mobile-hero-btn hero-get" onclick="switchTab('tab-get')">
+            <div class="hero-btn-icon">💳</div>
+            <div class="hero-btn-text">
+              <div class="hero-btn-title">Запросить помощь</div>
+              <div class="hero-btn-sub">Вывод на карту или СБП</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-headline">
+          <span>Ожидают помощи:</span>
+          <span class="badge-count" id="requests-count-badge">0</span>
+        </div>
+        <div class="requests-stack" id="give-help-list">
+          <!-- Заявки генерируются в app.js -->
+        </div>
+      </section>
+
+      <!-- =========================================================
+         ВКЛАДКА 2: Запросить помощь (Форма)
+         ========================================================= -->
+      <section id="tab-get" class="tab-panel">
+        <div class="section-headline">
+          <span>Запрос средств на реквизиты:</span>
+        </div>
+
+        <div class="form-card">
+          <form id="create-request-form" onsubmit="handleCreateRequest(event)">
+            <div class="form-group">
+              <label for="req-name">Ваше имя / псевдоним:</label>
+              <input type="text" id="req-name" class="form-control" placeholder="Иван П." required>
+            </div>
+
+            <div class="form-group">
+              <label for="req-amount">Сумма помощи (₽):</label>
+              <input type="number" id="req-amount" class="form-control" min="100" step="50"
+                placeholder="Введите сумму в рублях" required oninput="validateAmount(this)">
+              <div class="form-hint" id="amount-hint">Текущий лимит: 0 ₽</div>
+            </div>
+
+            <div class="form-group">
+              <label for="req-type">Способ получения:</label>
+              <select id="req-type" class="form-control" required>
+                <option value="Банковская карта (Сбер)">Банковская карта (Сбербанк)</option>
+                <option value="Банковская карта (Т-Банк)">Банковская карта (Т-Банк)</option>
+                <option value="СБП (по номеру телефона)">СБП (Система быстрых платежей)</option>
+                <option value="USDT TRC20">USDT (TRC-20)</option>
+                <option value="ЮMoney">ЮMoney</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="req-details-input">Реквизиты (номер карты / СБП телефон):</label>
+              <input type="text" id="req-details-input" class="form-control"
+                placeholder="2202 2030 4567 8901 или +7 999 123-45-67" required>
+            </div>
+
+            <div class="form-group">
+              <label for="req-comment">Цель запроса:</label>
+              <textarea id="req-comment" class="form-control" rows="2"
+                placeholder="Например: Помощь семье / ремонт авто" required></textarea>
+            </div>
+
+            <div class="form-actions-stack">
+              <button type="submit" class="btn-apple btn-apple-blue btn-block" id="btn-submit-req">
+                🔵 Опубликовать запрос
+              </button>
+              <button type="button" class="btn-apple btn-apple-gold btn-block" onclick="openInviteModal()">
+                🎁 Пригласить друга (+1 000 ₽ к лимиту)
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- =========================================================
+         ВКЛАДКА 3: Отдельное окно «Таблица лидеров» (Leaderboard)
+         ========================================================= -->
+      <section id="tab-leaders" class="tab-panel">
+        <div class="leaders-screen-header">
+          <div class="leaders-screen-icon">🏆</div>
+          <div class="leaders-screen-title">Таблица лидеров</div>
+          <div class="leaders-screen-subtitle">Рейтинг участников по количеству монет Мавро (М°)</div>
+        </div>
+
+        <!-- Топ-3 пьедестал почета (Podium) -->
+        <div class="podium-container" id="leaders-podium">
+          <!-- Генерируется в app.js -->
+        </div>
+
+        <!-- Карточка позиции текущего пользователя -->
+        <div class="my-rank-banner" id="my-rank-banner">
+          <!-- Генерируется в app.js -->
+        </div>
+
+        <div class="section-headline" style="margin-top: 14px;">
+          <span>Все участники рейтинга</span>
+          <span class="badge-count" id="leaders-count-badge">0</span>
+        </div>
+
+        <div class="leaderboard-container" id="leaderboard-list">
+          <!-- Список генерируется в app.js -->
+        </div>
+      </section>
+
+      <!-- =========================================================
+         ВКЛАДКА 4: Общая история сделок
+         ========================================================= -->
+      <section id="tab-history" class="tab-panel">
+        <div class="history-screen-header">
+          <div class="history-screen-icon">📜</div>
+          <div>
+            <div class="history-screen-title">Общая история сделок</div>
+            <div class="history-screen-subtitle">Все совершенные операции и время</div>
+          </div>
+        </div>
+
+        <div class="section-headline">
+          <span>Реестр операций</span>
+          <span class="badge-count" id="deals-count-badge">0</span>
+        </div>
+        <div class="requests-stack" id="public-history-list">
+          <!-- Список всех сделок -->
+        </div>
+      </section>
+
+    </main>
+
+    <!-- =========================================================
+       НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ (BOTTOM NAVIGATION BAR)
+       ========================================================= -->
+    <nav class="bottom-nav-bar">
+      <button type="button" class="bottom-tab-btn active" id="btn-tab-give" onclick="switchTab('tab-give')">
+        <span class="tab-icon">🤝</span>
+        <span class="tab-label">Помощь</span>
+      </button>
+
+      <button type="button" class="bottom-tab-btn" id="btn-tab-get" onclick="switchTab('tab-get')">
+        <span class="tab-icon">💳</span>
+        <span class="tab-label">Запрос</span>
+      </button>
+
+      <button type="button" class="bottom-tab-btn" id="btn-tab-leaders" onclick="switchTab('tab-leaders')">
+        <span class="tab-icon">🏆</span>
+        <span class="tab-label">Лидеры</span>
+      </button>
+
+      <button type="button" class="bottom-tab-btn" id="btn-tab-history" onclick="switchTab('tab-history')">
+        <span class="tab-icon">📜</span>
+        <span class="tab-label">История</span>
+      </button>
+
+      <button type="button" class="bottom-tab-btn bonus-btn" onclick="openInviteModal()">
+        <span class="tab-icon">🎁</span>
+        <span class="tab-label">Бонус</span>
+      </button>
+    </nav>
+
+  </div> <!-- /app-shell -->
+
+  <!-- =========================================================
+     МОДАЛЬНЫЕ ОКНА ПРИЛОЖЕНИЯ
+     ========================================================= -->
+
+  <!-- Модальное окно перевода средств (Шаг 1) -->
+  <div class="modal-overlay" id="confirm-modal">
+    <div class="modal-box modal-bottom-sheet">
+      <div class="modal-handle-bar"></div>
+      <div class="modal-title">
+        Оказание помощи участнику
+        <button class="modal-close-x" onclick="closeModal()">✕</button>
+      </div>
+      <div id="modal-content" style="font-size: 14px; color: #1d1d1f; line-height: 1.6; margin-bottom: 16px;"></div>
+      <div class="form-group" style="margin-bottom: 18px;">
+        <label for="transfer-proof-input">Номер чека / код транзакции:</label>
+        <input type="text" id="transfer-proof-input" class="form-control"
+          placeholder="Например: Чек Сбер #99482" value="Чек Сбер #99482">
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-apple btn-apple-secondary" style="flex: 1;" onclick="closeModal()">Отмена</button>
+        <button class="btn-apple btn-apple-green" style="flex: 2;" id="modal-confirm-btn" onclick="submitAssistanceTransfer()">
+          Я перевел(а) ➔ Чек
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно входящих подтверждений (Шаг 2) -->
+  <div class="modal-overlay" id="confirm-incoming-modal" onclick="closeConfirmModal(event)">
+    <div class="modal-box modal-bottom-sheet modal-box-wide">
+      <div class="modal-handle-bar"></div>
+      <div class="modal-title">
+        🔔 Входящие подтверждения
+        <button class="modal-close-x" onclick="closeConfirmModal()">✕</button>
+      </div>
+      <p style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 14px;">
+        Проверьте зачисление средств на карту и подтвердите сделку.
+      </p>
+      <div class="requests-stack" id="incoming-transfers-list"></div>
+      <div style="margin-top: 14px; text-align: right;">
+        <button class="btn-apple btn-apple-secondary btn-block" onclick="closeConfirmModal()">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно «Пригласить друга» -->
+  <div class="modal-overlay" id="invite-modal" onclick="closeInviteModal(event)">
+    <div class="modal-box modal-bottom-sheet">
+      <div class="modal-handle-bar"></div>
+      <div class="modal-title">
+        🎁 Пригласить друга — Бонус 1 000 ₽
+        <button class="modal-close-x" onclick="closeInviteModal()">✕</button>
+      </div>
+      
+      <div style="font-size: 13.5px; color: var(--text-main); line-height: 1.5; margin-bottom: 14px;">
+        Отправьте свою реферальную ссылку другу. При его переходе вам сразу откроется стартовый лимит на запрос помощи <strong>1 000 ₽</strong> без стартового баланса!
+      </div>
+
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label>Ваша реферальная ссылка:</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="invite-link-input" class="form-control" readonly style="font-family: monospace; font-size: 12px; font-weight: 600; background: var(--bg);">
+          <button type="button" class="btn-apple btn-apple-blue" onclick="copyInviteLink(this)">Скопировать</button>
+        </div>
+      </div>
+
+      <div class="invite-stats-box">
+        <div>Приглашено: <strong id="invite-count-text">0</strong> чел.</div>
+        <div>Статус: <strong id="invite-bonus-status" style="color: #ff9500;">0 ₽</strong></div>
+      </div>
+
+      <div style="margin-top: 18px; display: flex; flex-direction: column; gap: 8px;">
+        <button type="button" class="btn-apple btn-apple-blue btn-block" onclick="shareInTelegram()">
+          ✈️ Поделиться в Telegram
+        </button>
+        <button type="button" class="btn-apple btn-apple-green btn-block" onclick="simulateInviteFriend()">
+          ✨ Симулировать приглашение (+1 000 ₽)
+        </button>
+        <button type="button" class="btn-apple btn-apple-secondary btn-block" onclick="closeInviteModal()">
+          Закрыть
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Главная Админ-панель -->
+  <div class="modal-overlay" id="admin-modal" onclick="closeAdminModal(event)">
+    <div class="modal-box modal-box-admin">
+      <div class="modal-title admin-header-title">
+        <div class="admin-title-left">
+          <span class="admin-icon-glow">⚡</span>
+          <div>
+            <div style="font-size: 17px; font-weight: 800; color: var(--navy); display: flex; align-items: center; gap: 6px;">
+              Панель администратора
+              <span class="admin-chip-status">CORE</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted);">
+              Управление балансами, холдами и заявками
+            </div>
+          </div>
+        </div>
+        <button class="modal-close-x" onclick="closeAdminModal()">✕</button>
+      </div>
+
+      <div class="admin-tabs-nav">
+        <button type="button" class="admin-tab-btn active" id="btn-admin-tab-users" onclick="switchAdminTab('admin-tab-users')">
+          👥 Участники
+        </button>
+        <button type="button" class="admin-tab-btn" id="btn-admin-tab-requests" onclick="switchAdminTab('admin-tab-requests')">
+          📋 Заявки (<span id="admin-req-total-count">0</span>)
+        </button>
+        <button type="button" class="admin-tab-btn" id="btn-admin-tab-tools" onclick="switchAdminTab('admin-tab-tools')">
+          ⚙️ Утилиты
+        </button>
+      </div>
+
+      <!-- Вкладка 1: Балансы -->
+      <div id="admin-tab-users" class="admin-tab-content active">
+        <div class="admin-tab-header">
+          <h3 style="font-size: 14px; font-weight: 700; color: var(--navy);">Балансы участников</h3>
+          <button class="btn-apple btn-apple-blue" style="font-size: 12px; padding: 6px 12px;" onclick="openAdminCreateUserModal()">
+            ➕ Добавить
+          </button>
+        </div>
+        <div id="admin-users-list" class="admin-users-grid"></div>
+      </div>
+
+      <!-- Вкладка 2: Заявки -->
+      <div id="admin-tab-requests" class="admin-tab-content">
+        <div class="admin-tab-header">
+          <h3 style="font-size: 14px; font-weight: 700; color: var(--navy);">Все P2P заявки</h3>
+          <button class="btn-apple btn-apple-green" style="font-size: 12px; padding: 6px 12px;" onclick="openAdminCreateReqModal()">
+            ➕ Создать
+          </button>
+        </div>
+        <div class="admin-filter-row">
+          <input type="text" id="admin-req-search" class="form-control admin-search-input" placeholder="🔍 Поиск..." oninput="renderAdminRequests()">
+          <select id="admin-req-status-filter" class="form-control admin-select-filter" onchange="renderAdminRequests()">
+            <option value="all">Все статусы</option>
+            <option value="open">🟡 open</option>
+            <option value="sent">🟠 sent</option>
+            <option value="confirmed">🟢 confirmed</option>
+            <option value="dispute">🔴 dispute</option>
+          </select>
+        </div>
+        <div id="admin-requests-list" class="admin-requests-table-container"></div>
+      </div>
+
+      <!-- Вкладка 3: Утилиты -->
+      <div id="admin-tab-tools" class="admin-tab-content">
+        <div class="admin-tools-grid">
+          <div class="admin-tool-card highlight-tool">
+            <div class="admin-tool-icon">⚡</div>
+            <div class="admin-tool-body">
+              <h4>Мгновенная разморозка</h4>
+              <p>Списывает холд и зачисляет М° по подтвержденным сделкам.</p>
+              <button class="btn-apple btn-apple-green" style="margin-top: 8px;" onclick="adminFixStuckPending()">
+                ⚡ Разморозить
+              </button>
+            </div>
+          </div>
+          <div class="admin-tool-card">
+            <div class="admin-tool-icon">🔄</div>
+            <div class="admin-tool-body">
+              <h4>Синхронизация Supabase</h4>
+              <p>Перезагрузка всех таблиц с сервера.</p>
+              <button class="btn-apple btn-apple-blue" style="margin-top: 8px;" onclick="adminForceSyncSupabase()">
+                🔄 Синхронизировать
+              </button>
+            </div>
+          </div>
+          <div class="admin-tool-card">
+            <div class="admin-tool-icon">➕</div>
+            <div class="admin-tool-body">
+              <h4>3 демо-заявки</h4>
+              <p>Создать тестовые заявки в реестр.</p>
+              <button class="btn-apple btn-apple-secondary" style="margin-top: 8px;" onclick="adminGenerateTestRequests()">
+                ➕ Добавить
+              </button>
+            </div>
+          </div>
+          <div class="admin-tool-card danger-tool">
+            <div class="admin-tool-icon">♻️</div>
+            <div class="admin-tool-body">
+              <h4>Сброс данных</h4>
+              <p>Сброс к исходному состоянию.</p>
+              <button class="btn-apple btn-apple-danger" style="margin-top: 8px;" onclick="adminResetDemoData()">
+                ♻️ Сбросить всё
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-footer-bar">
+        <div id="admin-toast-message" class="admin-toast"></div>
+        <button class="btn-apple btn-apple-secondary" onclick="closeAdminModal()">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно редактирования заявки админом -->
+  <div class="modal-overlay" id="admin-edit-req-modal" onclick="closeAdminEditReqModal(event)">
+    <div class="modal-box modal-bottom-sheet">
+      <div class="modal-title">
+        ✏️ Редактирование заявки <span id="edit-req-id-badge" style="font-size: 12px; color: var(--accent);"></span>
+        <button class="modal-close-x" onclick="closeAdminEditReqModal()">✕</button>
+      </div>
+      <form id="admin-edit-req-form" onsubmit="saveAdminReqEdit(event)">
+        <input type="hidden" id="edit-req-id">
+        <div class="form-group">
+          <label for="edit-req-name">Имя получателя:</label>
+          <input type="text" id="edit-req-name" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-req-amount">Сумма (₽):</label>
+          <input type="number" id="edit-req-amount" class="form-control" min="1" step="any" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-req-status">Статус:</label>
+          <select id="edit-req-status" class="form-control" required>
+            <option value="open">🟡 open</option>
+            <option value="sent">🟠 sent</option>
+            <option value="confirmed">🟢 confirmed</option>
+            <option value="dispute">🔴 dispute</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="edit-req-type">Способ оплаты:</label>
+          <select id="edit-req-type" class="form-control" required>
+            <option value="Банковская карта (Сбер)">Банковская карта (Сбер)</option>
+            <option value="Банковская карта (Т-Банк)">Банковская карта (Т-Банк)</option>
+            <option value="СБП (по номеру телефона)">СБП (по номеру телефона)</option>
+            <option value="USDT TRC20">USDT TRC20</option>
+            <option value="ЮMoney">ЮMoney</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="edit-req-details">Реквизиты:</label>
+          <input type="text" id="edit-req-details" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-req-comment">Цель:</label>
+          <textarea id="edit-req-comment" class="form-control" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="edit-req-sender">Отправитель:</label>
+          <input type="text" id="edit-req-sender" class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="edit-req-proof">Чек:</label>
+          <input type="text" id="edit-req-proof" class="form-control">
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+          <button type="button" class="btn-apple btn-apple-secondary" style="flex: 1;" onclick="closeAdminEditReqModal()">Отмена</button>
+          <button type="submit" class="btn-apple btn-apple-blue" style="flex: 1;">💾 Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно создания заявки админом -->
+  <div class="modal-overlay" id="admin-create-req-modal" onclick="closeAdminCreateReqModal(event)">
+    <div class="modal-box modal-bottom-sheet">
+      <div class="modal-title">
+        ➕ Создание новой P2P заявки
+        <button class="modal-close-x" onclick="closeAdminCreateReqModal()">✕</button>
+      </div>
+      <form id="admin-create-req-form" onsubmit="saveAdminCreateReq(event)">
+        <div class="form-group">
+          <label for="admin-new-name">Имя получателя:</label>
+          <input type="text" id="admin-new-name" class="form-control" placeholder="Иван И." required>
+        </div>
+        <div class="form-group">
+          <label for="admin-new-amount">Сумма помощи (₽):</label>
+          <input type="number" id="admin-new-amount" class="form-control" min="100" step="50" placeholder="5000" required>
+        </div>
+        <div class="form-group">
+          <label for="admin-new-type">Способ перевода:</label>
+          <select id="admin-new-type" class="form-control" required>
+            <option value="Банковская карта (Сбер)">Банковская карта (Сбер)</option>
+            <option value="Банковская карта (Т-Банк)">Банковская карта (Т-Банк)</option>
+            <option value="СБП (по номеру телефона)">СБП (по номеру телефона)</option>
+            <option value="USDT TRC20">USDT TRC20</option>
+            <option value="ЮMoney">ЮMoney</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="admin-new-details">Реквизиты:</label>
+          <input type="text" id="admin-new-details" class="form-control" placeholder="2202 2012 3456 7890" required>
+        </div>
+        <div class="form-group">
+          <label for="admin-new-comment">Комментарий:</label>
+          <textarea id="admin-new-comment" class="form-control" rows="2" placeholder="Назначение"></textarea>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+          <button type="button" class="btn-apple btn-apple-secondary" style="flex: 1;" onclick="closeAdminCreateReqModal()">Отмена</button>
+          <button type="submit" class="btn-apple btn-apple-green" style="flex: 1;">➕ Создать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно добавления участника админом -->
+  <div class="modal-overlay" id="admin-create-user-modal" onclick="closeAdminCreateUserModal(event)">
+    <div class="modal-box modal-bottom-sheet">
+      <div class="modal-title">
+        ➕ Добавление участника
+        <button class="modal-close-x" onclick="closeAdminCreateUserModal()">✕</button>
+      </div>
+      <form id="admin-create-user-form" onsubmit="saveAdminCreateUser(event)">
+        <div class="form-group">
+          <label for="admin-user-name">Имя / Псевдоним:</label>
+          <input type="text" id="admin-user-name" class="form-control" placeholder="Николай В." required>
+        </div>
+        <div class="form-group">
+          <label for="admin-user-balance">Баланс (М°):</label>
+          <input type="number" id="admin-user-balance" class="form-control" value="10000" min="0" step="any" required>
+        </div>
+        <div class="form-group">
+          <label for="admin-user-pending">В холде (М°):</label>
+          <input type="number" id="admin-user-pending" class="form-control" value="0" min="0" step="any" required>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+          <button type="button" class="btn-apple btn-apple-secondary" style="flex: 1;" onclick="closeAdminCreateUserModal()">Отмена</button>
+          <button type="submit" class="btn-apple btn-apple-blue" style="flex: 1;">➕ Создать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Supabase JS Client v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
