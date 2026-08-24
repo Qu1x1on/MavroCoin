@@ -59,6 +59,10 @@ function initTelegramUser() {
   return currentTgUser.id;
 }
 
+function isRealTelegramUser() {
+  return Boolean(TG?.initDataUnsafe?.user?.id);
+}
+
 // Инициализируем пользователя сразу
 let currentUserId = initTelegramUser();
 
@@ -327,6 +331,12 @@ async function initSupabase() {
 
 async function syncUserWithSupabase() {
   if (!supabaseClient || !isSupabaseConnected) return;
+
+  // Если приложение открыто в обычном браузере без Telegram SDK — не засоряем общую БД
+  if (!isRealTelegramUser()) {
+    console.log("ℹ️ Браузерный режим: профиль не регистрируется в Supabase.");
+    return;
+  }
 
   const displayName = currentTgUser ? currentTgUser.name : "Участник";
 
@@ -672,55 +682,89 @@ function renderAll() {
     }
   }
 
-  // 3. Входящие подтверждения
+  // 3. Входящие подтверждения (P2P сделки)
   const incomingListElem = document.getElementById("incoming-transfers-list");
-  const sentRequests = appState.requests.filter(r => r.status === "sent");
+  // Заявки, которые создал текущий пользователь и кто-то оплатил (требуется подтверждение получателя)
+  const incomingForMe = appState.requests.filter(r => r.status === "sent" && (r.user_id === currentUserId || r.isMine));
+  // Заявки, которые оплатил текущий пользователь и ждет подтверждения получателя
+  const mySentAwaiting = appState.requests.filter(r => r.status === "sent" && r.sender_id === currentUserId && r.user_id !== currentUserId && !r.isMine);
   
   const incomingBadge = document.getElementById("incoming-count-badge");
   if (incomingBadge) {
-    incomingBadge.textContent = sentRequests.length;
-    incomingBadge.style.display = sentRequests.length > 0 ? "flex" : "none";
+    incomingBadge.textContent = incomingForMe.length;
+    incomingBadge.style.display = incomingForMe.length > 0 ? "flex" : "none";
   }
 
   if (incomingListElem) {
-    if (sentRequests.length === 0) {
+    if (incomingForMe.length === 0 && mySentAwaiting.length === 0) {
       incomingListElem.innerHTML = `
         <div class="empty-placeholder">
-          Нет заявок, ожидающих подтверждения второй стороны.<br>
-          <em>Окажите помощь по открытой заявке в первом разделе для проверки перевода.</em>
+          Нет переводов, ожидающих подтверждения.<br>
+          <em>Когда другой участник переведёт вам рубли по вашей заявке, здесь появится карточка для проверки и подтверждения.</em>
         </div>
       `;
     } else {
-      incomingListElem.innerHTML = sentRequests.map(req => {
+      let html = "";
+
+      // 1. Входящие переводы для подтверждения получателем
+      incomingForMe.forEach(req => {
         const earnedM = req.amount * RATE_RUB_PER_M;
-        return `
-          <div class="req-item-card pending-verification">
+        html += `
+          <div class="req-item-card pending-verification" style="border-left: 4px solid #ff9500;">
             <div class="req-row-top">
-              <div class="req-person">Получатель: ${escapeHtml(req.name)} (${escapeHtml(req.paymentType)})</div>
-              <div class="req-sum">${req.amount.toLocaleString("ru-RU")} ₽</div>
+              <div class="req-person">Вам перевели: <strong>${req.amount.toLocaleString("ru-RU")} ₽</strong></div>
+              <div class="req-sum" style="color: var(--success); font-size: 14px;">Входящий перевод</div>
             </div>
             
             <div style="background-color: #fff9ed; border: 1px dashed #ff9500; border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 13px;">
-              <strong>🔔 Входящее уведомление о переводе:</strong><br>
+              <strong>🔔 Входящее уведомление о переводе на вашу карту:</strong><br>
               Отправитель: <strong>${escapeHtml(req.senderName || "Участник MavroCoin")}</strong><br>
-              Номер чека / квитанция: <code>${escapeHtml(req.transferProof || "Без номера")}</code><br>
-              Зачисление на: <code>${escapeHtml(req.details)}</code>
+              Реквизиты: <code>${escapeHtml(req.details)}</code> (${escapeHtml(req.paymentType)})<br>
+              Чек / Квитанция: <code>${escapeHtml(req.transferProof || "Без номера")}</code>
+            </div>
+
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+              Проверьте зачисление <strong>${req.amount.toLocaleString("ru-RU")} ₽</strong> в вашем банковском приложении. Если средства поступили — нажмите «Подтвердить».
             </div>
 
             <div class="req-row-bottom">
-              <span class="status-pill sent">🟠 Требуется подтверждение получения</span>
-              <div style="display: flex; gap: 8px;">
-                <button class="btn-apple" onclick="receiverConfirmTransfer('${req.id}')">
-                  ✅ Подтвердить получение (+${earnedM.toLocaleString("ru-RU")} М°)
+              <div style="display: flex; gap: 8px; width: 100%;">
+                <button class="btn-apple btn-apple-green" style="flex: 2;" onclick="receiverConfirmTransfer('${req.id}')">
+                  ✅ Подтвердить получение (${req.amount.toLocaleString("ru-RU")} ₽)
                 </button>
-                <button class="btn-apple btn-apple-danger" onclick="receiverRejectTransfer('${req.id}')">
+                <button class="btn-apple btn-apple-danger" style="flex: 1;" onclick="receiverRejectTransfer('${req.id}')">
                   ❌ Не поступили
                 </button>
               </div>
             </div>
           </div>
         `;
-      }).join("");
+      });
+
+      // 2. Отправленные переводы (ожидание подтверждения получателем)
+      mySentAwaiting.forEach(req => {
+        const earnedM = req.amount * RATE_RUB_PER_M;
+        html += `
+          <div class="req-item-card" style="border-left: 4px solid #3b82f6; opacity: 0.95;">
+            <div class="req-row-top">
+              <div class="req-person">Вы оказали помощь: <strong>${escapeHtml(req.name)}</strong></div>
+              <div class="req-sum">${req.amount.toLocaleString("ru-RU")} ₽</div>
+            </div>
+            
+            <div style="background-color: #eff6ff; border: 1px dashed #93c5fd; border-radius: 8px; padding: 12px; margin-bottom: 10px; font-size: 13px;">
+              <strong>⏳ Ожидание подтверждения получателем:</strong><br>
+              Получатель: <strong>${escapeHtml(req.name)}</strong> (${escapeHtml(req.paymentType)})<br>
+              Ваш чек: <code>${escapeHtml(req.transferProof || "Отправлен")}</code>
+            </div>
+
+            <div style="font-size: 12px; color: #2563eb; font-weight: 500;">
+              Как только ${escapeHtml(req.name)} подтвердит получение рублей, вам будет начислено <strong>+${earnedM.toLocaleString("ru-RU")} М°</strong>, а лимит на вывод увеличится на <strong>+30%</strong>.
+            </div>
+          </div>
+        `;
+      });
+
+      incomingListElem.innerHTML = html;
     }
   }
 
@@ -745,8 +789,10 @@ function renderLeaderboard() {
 
   if (!container) return;
 
-  // Сортируем пользователей по балансу М° (от большего к меньшему)
-  const sortedUsers = [...appState.users].sort((a, b) => (b.balance_m || 0) - (a.balance_m || 0));
+  // В рейтинг попадают только реальные участники Telegram (исключаем локальные тестовые id)
+  const sortedUsers = [...appState.users]
+    .filter(u => !u.id.startsWith("tg-") && !u.id.startsWith("dev-") && !u.id.startsWith("usr-") && !u.id.startsWith("demo-"))
+    .sort((a, b) => (b.balance_m || 0) - (a.balance_m || 0));
 
   if (countBadge) countBadge.textContent = sortedUsers.length;
 
@@ -1069,10 +1115,11 @@ async function submitAssistanceTransfer() {
 
   const proof = document.getElementById("transfer-proof-input").value.trim() || "Чек перевода прикреплен";
   const earnedM = req.amount * RATE_RUB_PER_M;
+  const senderDisplayName = currentTgUser ? (currentTgUser.username ? `${currentTgUser.name} (@${currentTgUser.username})` : currentTgUser.name) : "Участник";
 
   req.status = "sent";
   req.sender_id = currentUserId;
-  req.senderName = "Вы (Текущий аккаунт)";
+  req.senderName = senderDisplayName;
   req.transferProof = proof;
   appState.pendingBalanceM += earnedM;
 
@@ -1086,7 +1133,7 @@ async function submitAssistanceTransfer() {
         .update({
           status: "sent",
           sender_id: currentUserId,
-          sender_name: "Вы (Текущий аккаунт)",
+          sender_name: senderDisplayName,
           transfer_proof: proof
         })
         .eq("id", req.id);
@@ -1100,8 +1147,7 @@ async function submitAssistanceTransfer() {
     }
   }
 
-  alert(`Шаг 1 выполнен!\nПеревод на ${req.amount.toLocaleString("ru-RU")} ₽ отправлен на проверку получателю.\n\nЗаявка появилась в списке входящих подтверждений (🔔).`);
-  openConfirmModal();
+  alert(`🤝 Перевод на ${req.amount.toLocaleString("ru-RU")} ₽ отправлен получателю ${req.name}!\n\nПолучатель получил уведомление в приложении (🔔). Как только он проверит зачисление рублей на свою карту и подтвердит сделку, вам зачислится +${earnedM.toLocaleString("ru-RU")} М° и увеличится лимит на +30%.`);
 }
 
 // Получатель подтверждает получение
@@ -1110,21 +1156,19 @@ async function receiverConfirmTransfer(requestId) {
   if (!req) return;
 
   const earnedM = req.amount * RATE_RUB_PER_M;
-  const limitBoost = Math.floor(earnedM * ASSISTANCE_LIMIT_MULTIPLIER);
   req.status = "confirmed";
 
-  const isCurrentSender = (req.sender_id === currentUserId) || 
-                          (req.senderName && (req.senderName.includes("Вы") || req.senderName.includes(currentUserId.slice(-4)))) ||
-                          (!req.sender_id && !req.isMine);
-
+  // Если текущий пользователь был отправителем (например, при локальном тесте)
+  const isCurrentSender = (req.sender_id === currentUserId);
   if (isCurrentSender) {
     appState.pendingBalanceM = Math.max(0, (appState.pendingBalanceM || 0) - earnedM);
     appState.userBalanceM = (appState.userBalanceM || 0) + earnedM;
   }
 
-  if (req.sender_id) {
+  // Обновляем отправителя в локальном списке
+  if (req.sender_id && req.sender_id !== currentUserId) {
     const senderUser = appState.users.find(u => u.id === req.sender_id);
-    if (senderUser && senderUser.id !== currentUserId) {
+    if (senderUser) {
       senderUser.pending_m = Math.max(0, (senderUser.pending_m || 0) - earnedM);
       senderUser.balance_m = (senderUser.balance_m || 0) + earnedM;
     }
@@ -1140,25 +1184,33 @@ async function receiverConfirmTransfer(requestId) {
         .update({ status: "confirmed" })
         .eq("id", req.id);
 
-      await supabaseClient
-        .from("mavro_users")
-        .update({
-          balance_m: appState.userBalanceM,
-          pending_m: appState.pendingBalanceM
-        })
-        .eq("id", currentUserId);
-
       if (req.sender_id && req.sender_id !== currentUserId) {
-        const senderUser = appState.users.find(u => u.id === req.sender_id);
-        if (senderUser) {
+        // Начисляем монеты отправителю в Supabase
+        const { data: senderDbUser } = await supabaseClient
+          .from("mavro_users")
+          .select("balance_m, pending_m")
+          .eq("id", req.sender_id)
+          .single();
+
+        if (senderDbUser) {
+          const newBal = Number(senderDbUser.balance_m || 0) + earnedM;
+          const newPend = Math.max(0, Number(senderDbUser.pending_m || 0) - earnedM);
           await supabaseClient
             .from("mavro_users")
             .update({
-              balance_m: senderUser.balance_m,
-              pending_m: senderUser.pending_m
+              balance_m: newBal,
+              pending_m: newPend
             })
             .eq("id", req.sender_id);
         }
+      } else if (isCurrentSender) {
+        await supabaseClient
+          .from("mavro_users")
+          .update({
+            balance_m: appState.userBalanceM,
+            pending_m: appState.pendingBalanceM
+          })
+          .eq("id", currentUserId);
       }
     } catch (e) {
       console.warn("Supabase confirm error:", e);
@@ -1166,7 +1218,7 @@ async function receiverConfirmTransfer(requestId) {
   }
 
   closeConfirmModal();
-  alert(`✅ Сделка успешно подтверждена!\nПолучатель ${req.name} подтвердил получение ${req.amount.toLocaleString("ru-RU")} ₽.\nМонеты +${earnedM.toLocaleString("ru-RU")} М° зачислены на баланс!`);
+  alert(`✅ Сделка подтверждена!\nВы подтвердили получение ${req.amount.toLocaleString("ru-RU")} ₽. Сделка успешно закрыта, а участнику начислены монеты Мавро.`);
   switchTab("tab-history");
 }
 
