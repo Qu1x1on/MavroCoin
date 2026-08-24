@@ -339,19 +339,37 @@ async function syncUserWithSupabase() {
 
     if (error && error.code === "PGRST116") {
       // Новый пользователь — регистрируем
-      const { data: newUser } = await supabaseClient
+      let insertPayload = {
+        id: currentUserId,
+        name: displayName,
+        username: currentTgUser?.username || null,
+        photo_url: currentTgUser?.photo_url || null,
+        telegram_id: currentTgUser?.telegram_id || null,
+        balance_m: appState.userBalanceM || 0,
+        pending_m: appState.pendingBalanceM || 0
+      };
+
+      let { data: newUser, error: insertError } = await supabaseClient
         .from("mavro_users")
-        .insert([{
-          id: currentUserId,
-          name: displayName,
-          username: currentTgUser?.username || null,
-          photo_url: currentTgUser?.photo_url || null,
-          telegram_id: currentTgUser?.telegram_id || null,
-          balance_m: appState.userBalanceM || 0,
-          pending_m: appState.pendingBalanceM || 0
-        }])
+        .insert([insertPayload])
         .select()
         .single();
+
+      // Если в БД еще не добавлены колонки username/photo_url — делаем базовый insert
+      if (insertError) {
+        console.warn("Retrying with base columns:", insertError.message);
+        const { data: baseUser } = await supabaseClient
+          .from("mavro_users")
+          .insert([{
+            id: currentUserId,
+            name: displayName,
+            balance_m: appState.userBalanceM || 0,
+            pending_m: appState.pendingBalanceM || 0
+          }])
+          .select()
+          .single();
+        newUser = baseUser;
+      }
 
       if (newUser) {
         appState.userBalanceM = Number(newUser.balance_m);
@@ -363,16 +381,26 @@ async function syncUserWithSupabase() {
       appState.userBalanceM = Number(data.balance_m);
       appState.pendingBalanceM = Number(data.pending_m);
 
-      // Обновляем TG-профиль в базе (имя / фото могли измениться)
-      await supabaseClient
+      // Обновляем TG-профиль в базе
+      const updatePayload = {
+        name: displayName,
+        username: currentTgUser?.username || data.username,
+        photo_url: currentTgUser?.photo_url || data.photo_url,
+        telegram_id: currentTgUser?.telegram_id || data.telegram_id
+      };
+
+      const { error: updateError } = await supabaseClient
         .from("mavro_users")
-        .update({
-          name: displayName,
-          username: currentTgUser?.username || data.username,
-          photo_url: currentTgUser?.photo_url || data.photo_url,
-          telegram_id: currentTgUser?.telegram_id || data.telegram_id
-        })
+        .update(updatePayload)
         .eq("id", currentUserId);
+
+      if (updateError) {
+        // Фоллбэк на обновление только имени
+        await supabaseClient
+          .from("mavro_users")
+          .update({ name: displayName })
+          .eq("id", currentUserId);
+      }
 
       saveState();
     }
