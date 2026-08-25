@@ -378,6 +378,23 @@ async function initSupabase() {
       })
       .subscribe();
 
+    // Автоматическая фоновая синхронизация каждые 3 секунды для всех участников
+    if (!window._mavroSyncTimer) {
+      window._mavroSyncTimer = setInterval(async () => {
+        if (isSupabaseConnected && supabaseClient) {
+          await fetchRequestsFromSupabase();
+          await fetchAllUsersFromSupabase();
+        }
+      }, 3000);
+    }
+
+    window.addEventListener("focus", () => {
+      if (isSupabaseConnected && supabaseClient) {
+        fetchRequestsFromSupabase();
+        fetchAllUsersFromSupabase();
+      }
+    });
+
   } catch (err) {
     console.error("Ошибка инициализации Supabase:", err);
     updateDbStatusBadge("local", err.message);
@@ -461,7 +478,7 @@ async function syncUserWithSupabase() {
         .eq("id", currentUserId);
 
       if (updateError) {
-        // Фоллбэк на обновление только имени
+        // Обновляем TG-профиль в базе
         await supabaseClient
           .from("mavro_users")
           .update({ name: displayName })
@@ -469,6 +486,8 @@ async function syncUserWithSupabase() {
       }
 
       saveState();
+      renderAll();
+      renderAdminUsers();
     }
   } catch (err) {
     console.warn("Ошибка syncUserWithSupabase:", err);
@@ -510,6 +529,8 @@ async function fetchRequestsFromSupabase() {
 
       reconcilePendingBalances();
       saveState();
+      renderAll();
+      renderAdminRequests();
     }
   } catch (err) {
     console.error("Ошибка fetchRequestsFromSupabase:", err);
@@ -556,6 +577,8 @@ async function fetchAllUsersFromSupabase() {
       }
 
       saveState();
+      renderAll();
+      renderAdminUsers();
     }
   } catch (e) {
     console.warn("Ошибка fetchAllUsersFromSupabase:", e);
